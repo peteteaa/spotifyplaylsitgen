@@ -1,0 +1,21 @@
+name = "skyesthingy"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+# One cron for everyone. Free plan allows 5 cron triggers per account; we use 1.
+[triggers]
+crons = ["*/15 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "autolist"
+database_id = "REPLACE_WITH_ID_FROM_wrangler_d1_create"
+migrations_dir = "migrations"
+
+[vars]
+PLAYLIST_PREFIX = "Autolist"
+# Optional: your Spotify user id (or account_id). If empty, the first account to connect becomes admin.
+ADMIN_SPOTIFY_ID = ""
+
+# Secrets (set with `npx wrangler secret put NAME`, or in .dev.vars for local dev):
+#   SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SESSION_SECRET, LASTFM_API_KEY
