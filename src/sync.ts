@@ -34,7 +34,10 @@ const LOCK_MS = 5 * 60_000;
 const WORK_LIMIT = 300; // songs considered per user per run
 const MAX_ARTISTS_PER_TRACK = 3; // primary first; the others only if the primary doesn't match
 const LASTFM_BACKOFF_MS = 10 * 60_000;
-const MAX_TRIES = 5; // failed lookups before a pending song gives up waiting and goes to Misc
+const MAX_TRIES = 5;
+// Spotify can list a play in recently-played a few minutes late, sometimes after a later play.
+// Re-read this far behind the cursor so a late arrival isn't skipped (dedupe ignores repeats).
+const LOOKBACK_MS = 30 * 60_000; // failed lookups before a pending song gives up waiting and goes to Misc
 
 // ---------- Playlists ----------
 
@@ -218,7 +221,7 @@ export async function syncUser(
     await ensurePlaylists(env, spotify, playlists, ch);
 
     if (opts.fetchRecent) {
-      const plays = await spotify.recentlyPlayed(user.cursor_after);
+      const plays = await spotify.recentlyPlayed(user.cursor_after ? user.cursor_after - LOOKBACK_MS : null);
       let cursor = user.cursor_after ?? 0;
       const inserts: D1PreparedStatement[] = [];
       for (const p of [...plays].reverse()) {

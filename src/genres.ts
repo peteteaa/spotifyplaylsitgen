@@ -5,6 +5,8 @@
 // - A keyword matches on word boundaries, so 'rap' matches "pop rap" but not "trapeze".
 // - 'unless' keywords stop that rule from matching a genre (e.g. Pop ignores "k pop").
 // - A genre can match several buckets ("indie pop" -> Indie / Alternative and Pop).
+// - OVERRIDES: when an artist matches a specific bucket, drop the broader ones listed
+//   (K-pop acts are also tagged "pop" on Last.fm, but should land in K-Pop).
 // - Anything that matches nothing ends up in Misc.
 // - JUNK_TAGS are Last.fm tags we ignore entirely.
 
@@ -198,6 +200,11 @@ export function normalize(raw: string): string {
     .trim()
 }
 
+/** Specific bucket -> broader buckets it replaces for the same artist. */
+export const OVERRIDES: Record<string, string[]> = {
+  'K-Pop': ['Pop'],
+}
+
 function hasKeyword(paddedGenre: string, keyword: string): boolean {
   return paddedGenre.includes(' ' + keyword + ' ')
 }
@@ -210,6 +217,9 @@ export function bucketsFor(rawGenres: string[]): string[] {
       if (rule.unless?.some((k) => hasKeyword(padded, k))) continue
       if (rule.match.some((k) => hasKeyword(padded, k))) found.add(rule.bucket)
     }
+  }
+  for (const [specific, broader] of Object.entries(OVERRIDES)) {
+    if (found.has(specific)) for (const b of broader) found.delete(b)
   }
   return BUCKETS.filter((b) => found.has(b))
 }

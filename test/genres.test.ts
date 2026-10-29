@@ -121,3 +121,10 @@ describe('bucketsFor false positives', () => {
     expect(bucketsFor([genre])).toEqual(expected)
   })
 })
+
+describe('OVERRIDES', () => {
+  it('K-pop acts tagged "pop" go to K-Pop, not Pop', () => {
+    expect(bucketsFor(['k-pop', 'kpop', 'korean', 'pop'])).toEqual(['K-Pop'])
+    expect(bestSlot(bucketsFor(['k-pop', 'pop']), ['Pop', 'K-Pop', 'R&B'])).toBe(1)
+  })
+})
