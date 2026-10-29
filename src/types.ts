@@ -31,6 +31,7 @@ export interface UserRow {
   last_sync_msg: string | null;
   last_sync_added: number;
   total_added: number;
+  avatar: string | null;
 }
 
 export interface TokenRow {
@@ -110,6 +111,7 @@ export interface RecentAdd {
 export interface HomeView {
   userId: string;
   userName: string;
+  avatar: string; // id from src/avatars.ts
   isAdmin: boolean;
   sync: SyncInfo;
   playlists: PlaylistView[]; // always 7, slot order
@@ -120,6 +122,7 @@ export interface HomeView {
 export interface AdminUserView {
   id: string;
   name: string;
+  avatar: string;
   isSelf: boolean; // the admin's own row: no remove button
   sync: SyncInfo;
   genres: string[]; // the 6 buckets, rank order
@@ -140,6 +143,11 @@ export interface AdminView {
   maxUsers: number;
   canInvite: boolean;
   flash?: string;
+}
+
+export interface PictureView {
+  current: string;
+  options: { id: string; name: string }[];
 }
 
 export interface GenresEditView {

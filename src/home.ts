@@ -1,8 +1,9 @@
 // Home dashboard and the genre editor (used by both a user for themselves and the admin).
 import { html } from './auth';
 import { Db } from './budget';
+import { AVATARS, avatarFor } from './avatars';
 import { BUCKETS } from './genres';
-import { genresEditPage, homePage, messagePage } from './html';
+import { genresEditPage, homePage, messagePage, picturePage } from './html';
 import { playlistName, pushPlaylists } from './sync';
 import { Env, GENRE_SLOTS, PLAYLIST_CAP, PlaylistRow, PlaylistView, SyncInfo, UserRow } from './types';
 
@@ -17,6 +18,7 @@ export const FLASH: Record<string, (n: number) => string> = {
   resumed: () => 'User resumed.',
   removed: () => 'User removed. Their playlists stay in their Spotify account but no longer update.',
   revoked: () => 'Invite revoked.',
+  picture: () => 'Picture updated.',
 };
 
 export function flashText(url: URL): string | undefined {
@@ -62,6 +64,7 @@ export async function homeResponse(env: Env, db: Db, user: UserRow, isAdmin: boo
     homePage({
       userId: user.id,
       userName: user.display_name,
+      avatar: avatarFor(user),
       isAdmin,
       sync: syncInfo(user, (pending.results[0] as { n: number }).n),
       playlists,
@@ -74,6 +77,19 @@ export async function homeResponse(env: Env, db: Db, user: UserRow, isAdmin: boo
       flash,
     }),
   );
+}
+
+// ---------- Profile picture ----------
+
+export function pictureForm(user: UserRow): Response {
+  return html(picturePage({ current: avatarFor(user), options: AVATARS }));
+}
+
+export async function savePicture(db: Db, user: UserRow, form: FormData): Promise<Response> {
+  const id = String(form.get('avatar') ?? '');
+  if (!AVATARS.some((a) => a.id === id)) return pictureForm(user);
+  await db.run('UPDATE users SET avatar = ? WHERE id = ?', id, user.id);
+  return redirect('/?flash=picture');
 }
 
 // ---------- Genre editor ----------

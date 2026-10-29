@@ -7,6 +7,11 @@ preview_urls = false # Spotify login only works on the main workers.dev URL
 [triggers]
 crons = ["*/15 * * * *"]
 
+# Static files (profile photos in public/pfp/). Served directly by Cloudflare, free and
+# without counting as Worker requests.
+[assets]
+directory = "./public"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "autolist"

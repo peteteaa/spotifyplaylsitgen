@@ -2,6 +2,7 @@
 import { INVITE_DAYS, html, randomToken, sha256 } from './auth';
 import { Db } from './budget';
 import { adminPage, inviteCreatedPage, messagePage } from './html';
+import { avatarFor } from './avatars';
 import { playlistViews, redirect, syncInfo } from './home';
 import { deleteUserData } from './sync';
 import { Env, GENRE_SLOTS, InviteRow, MAX_USERS, PlaylistRow, UserRow } from './types';
@@ -32,6 +33,7 @@ export async function adminResponse(env: Env, db: Db, adminId: string, flash?: s
         return {
           id: u.id,
           name: u.display_name,
+          avatar: avatarFor(u),
           isSelf: u.id === adminId,
           sync: syncInfo(u, pending.get(u.id) ?? 0),
           genres: mine.filter((p) => p.slot < GENRE_SLOTS).map((p) => p.bucket),

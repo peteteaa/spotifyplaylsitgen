@@ -2,7 +2,8 @@
 import { createInvite, adminResponse, removeUser, revokeInvite, setPaused } from './admin';
 import { callback, html, invitePage, isAdmin, login, logoutCookie, sessionUserId } from './auth';
 import { Db } from './budget';
-import { flashText, genresForm, homeResponse, redirect, saveGenres } from './home';
+import { avatarSvg } from './avatars';
+import { flashText, genresForm, homeResponse, pictureForm, redirect, savePicture, saveGenres } from './home';
 import { landingPage, messagePage } from './html';
 import { runScheduled, syncNow } from './sync';
 import { Env, UserRow } from './types';
@@ -29,6 +30,17 @@ async function route(req: Request, env: Env): Promise<Response> {
   if (method === 'GET' && path === '/callback') return callback(env, req);
   if (method === 'GET' && path.startsWith('/invite/')) return invitePage(env, req, decodeURIComponent(path.slice(8)));
   if (path === '/favicon.ico') return new Response(null, { status: 204 });
+  if (method === 'GET' && path.startsWith('/pfp/') && path.endsWith('.svg')) {
+    const svg = avatarSvg(decodeURIComponent(path.slice(5, -4)));
+    if (!svg) return new Response('Not found', { status: 404 });
+    return new Response(svg, {
+      headers: {
+        'Content-Type': 'image/svg+xml',
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'",
+      },
+    });
+  }
 
   if (method === 'POST') {
     // SameSite=Lax already blocks cross-site POSTs carrying our cookie; this is a second check.
@@ -58,6 +70,8 @@ async function route(req: Request, env: Env): Promise<Response> {
     const r = await syncNow(env, user.id);
     return redirect(r.rateLimited ? '/?flash=limited' : r.ran ? `/?flash=synced&n=${r.added}` : '/?flash=busy');
   }
+
+  if (path === '/picture') return method === 'POST' ? savePicture(db, user, await req.formData()) : pictureForm(user);
 
   if (path === '/genres') {
     const form = method === 'POST' ? await req.formData() : null;

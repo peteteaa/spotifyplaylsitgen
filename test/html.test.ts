@@ -7,7 +7,11 @@ import {
   inviteCreatedPage,
   landingPage,
   messagePage,
+  picturePage,
 } from '../src/html';
+// @ts-expect-error -- Node built-in: tests run in Node, but tsconfig only loads the Workers types.
+import { existsSync } from 'node:fs';
+import { AVATARS, avatarFor, avatarSvg, pfpUrl } from '../src/avatars';
 import type { AdminView, PlaylistView, SyncInfo } from '../src/types';
 
 const sync: SyncInfo = {
@@ -32,6 +36,7 @@ const playlists: PlaylistView[] = Array.from({ length: 7 }, (_, i) => ({
 const user = (over = {}) => ({
   id: 'u1',
   name: nasty,
+  avatar: 'goldfish',
   isSelf: false,
   sync,
   genres: ['A', 'B', 'C', 'D', 'E', 'F'],
@@ -53,7 +58,7 @@ describe('html', () => {
   });
 
   it('home escapes, has sync form, handles paused', () => {
-    const v = { userId: 'a&b', userName: nasty, isAdmin: true, sync, playlists, recent: [], flash: "O'Brien" };
+    const v = { userId: 'a&b', userName: nasty, avatar: 'duck', isAdmin: true, sync, playlists, recent: [], flash: "O'Brien" };
     const h = homePage(v);
     expect(h).not.toContain(nasty);
     expect(h).toContain('&lt;script&gt;x&lt;/script&gt;');
@@ -95,5 +100,36 @@ describe('html', () => {
     expect(g).toContain('name="slot5"');
     expect(g).toContain('<option value="A" selected>');
     expect(messagePage('Invite expired', nasty, { href: '/', text: 'Home' })).not.toContain(nasty);
+  });
+});
+
+describe('profile pictures', () => {
+  it('every picture has a file: photos in public/pfp, the rest as standalone SVGs', () => {
+    expect(AVATARS.length).toBe(16);
+    for (const a of AVATARS) {
+      const url = pfpUrl(a.id);
+      if (url.includes('.webp')) {
+        expect(existsSync(`public/pfp/${a.id}.webp`)).toBe(true);
+        continue;
+      }
+      const svg = avatarSvg(a.id)!;
+      expect(svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg"')).toBe(true);
+      expect(svg).not.toContain('NaN');
+      expect(svg).not.toContain('<script');
+    }
+    expect(avatarSvg('nope')).toBeNull();
+  });
+
+  it('defaults are stable per user and chosen ones win', () => {
+    expect(avatarFor({ id: 'abc' })).toBe(avatarFor({ id: 'abc', avatar: null }));
+    expect(avatarFor({ id: 'abc', avatar: 'heart' })).toBe('heart');
+    expect(avatarFor({ id: 'abc', avatar: 'clownfish' })).toBe('clownfish');
+    expect(avatarFor({ id: 'abc', avatar: 'not-a-picture' })).toBe(avatarFor({ id: 'abc' }));
+  });
+
+  it('picker marks the current picture', () => {
+    const h = picturePage({ current: 'globe', options: AVATARS });
+    expect(h).toContain('value="globe" checked');
+    expect(h).toContain('action="/picture"');
   });
 });
