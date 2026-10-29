@@ -14,7 +14,8 @@ export const GENRE_SLOTS = 6;
 export const MISC_SLOT = 6;
 
 export type UserStatus = 'active' | 'paused' | 'needs_reconnect';
-export type TrackStatus = 'pending' | 'queued' | 'added' | 'full';
+// skipped = played while adding (or its playlist) was paused; never added unless played again later
+export type TrackStatus = 'pending' | 'queued' | 'added' | 'full' | 'skipped';
 
 // ---- D1 rows ----
 
@@ -32,6 +33,7 @@ export interface UserRow {
   last_sync_added: number;
   total_added: number;
   avatar: string | null;
+  adding_paused_at: number | null; // set by the user: songs played from then on are skipped
 }
 
 export interface TokenRow {
@@ -48,6 +50,7 @@ export interface PlaylistRow {
   spotify_id: string | null;
   name_synced: number;
   item_count: number;
+  paused_at: number | null; // set by the user: songs for this playlist played from then on are skipped
 }
 
 export interface TrackRow {
@@ -89,6 +92,7 @@ export interface PlaylistView {
   url: string | null; // https://open.spotify.com/playlist/<id>, null if not created yet
   count: number;
   full: boolean; // count >= PLAYLIST_CAP: no longer receiving songs
+  paused: boolean; // paused by the user: songs for it are skipped
 }
 
 export interface SyncInfo {
@@ -99,6 +103,7 @@ export interface SyncInfo {
   lastSyncAdded: number;
   totalAdded: number;
   pending: number; // songs waiting for a genre lookup or to be added
+  addingPaused: boolean; // the user paused adding to all playlists
 }
 
 export interface RecentAdd {

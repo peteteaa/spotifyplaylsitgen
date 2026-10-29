@@ -22,6 +22,7 @@ const sync: SyncInfo = {
   lastSyncAdded: 3,
   totalAdded: 42,
   pending: 1,
+  addingPaused: false,
 };
 const nasty = '<script>x</script>';
 const playlists: PlaylistView[] = Array.from({ length: 7 }, (_, i) => ({
@@ -31,6 +32,7 @@ const playlists: PlaylistView[] = Array.from({ length: 7 }, (_, i) => ({
   url: i === 0 ? null : `https://open.spotify.com/playlist/${i}`,
   count: i,
   full: i === 1,
+  paused: i === 2,
 }));
 
 const user = (over = {}) => ({
@@ -74,6 +76,26 @@ describe('html', () => {
     expect(homePage({ ...v, sync: { ...sync, status: 'needs_reconnect' } })).toContain('Reconnect');
   });
 
+  it('home: pause adding, and pause/resume each playlist', () => {
+    const v = { userId: 'u', userName: 'U', avatar: 'duck', isAdmin: false, sync, playlists, recent: [] };
+    const h = homePage(v);
+    expect(h).toContain('action="/pause"');
+    expect(h).not.toContain('action="/resume"');
+    expect(h.match(/action="\/playlist\/pause"/g)).toHaveLength(6);
+    expect(h.match(/action="\/playlist\/resume"/g)).toHaveLength(1);
+    expect(h).toContain('<input type="hidden" name="slot" value="2"><button class="btn secondary small" type="submit">Resume</button>');
+    expect(h).toContain('Paused — songs for this playlist are skipped');
+    const p = homePage({ ...v, sync: { ...sync, addingPaused: true } });
+    expect(p).toContain('action="/resume"');
+    expect(p).not.toContain('action="/sync"');
+    expect(p).not.toContain('action="/pause"');
+    expect(p).toContain('Adding is paused');
+    // paused by the admin: no pause controls at all
+    const a = homePage({ ...v, sync: { ...sync, status: 'paused' } });
+    expect(a).not.toContain('action="/pause"');
+    expect(a).not.toContain('action="/playlist/');
+  });
+
   it('admin hides Remove for self, escapes confirm text', () => {
     const h = adminPage(admin());
     expect(h).not.toContain(nasty);
@@ -81,6 +103,9 @@ describe('html', () => {
     expect(h).toContain('data-confirm=');
     expect(h).toContain('User Management');
     expect(h).toContain('3 / 5 users');
+    expect(h).not.toContain('action="/playlist/'); // the admin sees pauses but can't toggle them
+    expect(h).toContain('Paused — songs for this playlist are skipped');
+    expect(adminPage(admin({ users: [user({ sync: { ...sync, addingPaused: true } })] }))).toContain('adding paused');
   });
 
   it('admin disables invite when !canInvite', () => {
