@@ -59,6 +59,7 @@ export interface TrackRow {
   status: TrackStatus;
   slot: number | null;
   added_at: number | null;
+  tries: number;
 }
 
 export interface ArtistRow {

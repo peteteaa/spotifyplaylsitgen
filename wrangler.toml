@@ -1,6 +1,7 @@
 name = "skyesthingy"
 main = "src/index.ts"
 compatibility_date = "2026-10-01"
+preview_urls = false # Spotify login only works on the main workers.dev URL
 
 # One cron for everyone. Free plan allows 5 cron triggers per account; we use 1.
 [triggers]
@@ -9,7 +10,7 @@ crons = ["*/15 * * * *"]
 [[d1_databases]]
 binding = "DB"
 database_name = "autolist"
-database_id = "REPLACE_WITH_ID_FROM_wrangler_d1_create"
+database_id = "8b77a341-6c0a-4395-b987-d6251933d629"
 migrations_dir = "migrations"
 
 [vars]
