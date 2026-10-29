@@ -65,6 +65,7 @@ box-shadow:inset 0 1px 0 rgba(255,255,255,.8),inset 0 -2px 6px rgba(255,255,255,
 .btn.secondary{color:#fff;border-color:var(--aqua3);background:linear-gradient(180deg,var(--aqua1),var(--aqua2) 50%,var(--aqua3) 51%,var(--aqua2))}
 .btn.danger{color:#fff;border-color:#a3200f;background:linear-gradient(180deg,#ffb09a,#f05a3c 50%,#c9301a 51%,#ef5b3d)}
 .btn.big{width:100%;min-height:58px;font-size:1.2rem}
+.btn.small{min-height:36px;padding:0 16px;font-size:.9rem}
 .btn[disabled]{filter:grayscale(.8);opacity:.6;cursor:not-allowed}
 .linkbtn{min-height:44px;display:inline-flex;align-items:center;font-weight:600}
 .alert,.banner,.callout{border-radius:14px;padding:12px 14px;margin:0 0 14px;border:1px solid var(--glass-edge);box-shadow:inset 0 1px 0 rgba(255,255,255,.7);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
@@ -178,13 +179,19 @@ function counts(s: SyncInfo): string {
   return `${s.lastSyncAdded} added last run · ${s.totalAdded} total · ${s.pending} pending`;
 }
 
-function playlistRows(pls: PlaylistView[]): string {
+/** `controls`: the owner's Pause/Resume button per playlist (home page only). */
+function playlistRows(pls: PlaylistView[], controls = false): string {
   return pls
-    .map(
-      (p) => `<div class="pl"><div class="row"><strong>${esc(p.name)}</strong><span class="muted">${p.count} songs</span></div>
-${p.url ? `<a class="linkbtn" href="${esc(p.url)}" target="_blank" rel="noopener">Open in Spotify</a>` : '<div class="muted">not created yet</div>'}
-${p.full ? '<div class="warn">Full (9,900+) — no longer receiving songs</div>' : ''}</div>`,
-    )
+    .map((p) => {
+      const open = p.url ? `<a class="linkbtn" href="${esc(p.url)}" target="_blank" rel="noopener">Open in Spotify</a>` : '<span class="muted">not created yet</span>';
+      const toggle = controls
+        ? `<form method="post" action="/playlist/${p.paused ? 'resume' : 'pause'}"><input type="hidden" name="slot" value="${p.slot}"><button class="btn secondary small" type="submit">${p.paused ? 'Resume' : 'Pause'}</button></form>`
+        : '';
+      return `<div class="pl"><div class="row"><strong>${esc(p.name)}</strong><span class="muted">${p.count} songs</span></div>
+<div class="row">${open}${toggle}</div>
+${p.paused ? '<div class="warn">Paused — songs for this playlist are skipped</div>' : ''}
+${p.full ? '<div class="warn">Full (9,900+) — no longer receiving songs</div>' : ''}</div>`;
+    })
     .join('');
 }
 
@@ -238,7 +245,9 @@ export function homePage(v: HomeView): string {
       ? `<div class="banner warn">Spotify access expired — <a href="/login">Reconnect</a></div>`
       : paused
         ? `<div class="banner warn">Syncing is paused by the admin</div>`
-        : '';
+        : s.addingPaused
+          ? `<div class="banner warn">Adding is paused. Songs you play now are skipped until you resume.</div>`
+          : '';
   const recent = v.recent.length
     ? `<ul class="plain">${v.recent
         .map(
@@ -260,10 +269,13 @@ ${win(
 <div class="actions">${
     paused
       ? '<span class="muted">Sync now is unavailable while paused.</span>'
-      : '<form method="post" action="/sync"><button class="btn" type="submit">Sync now</button></form>'
+      : s.addingPaused
+        ? '<form method="post" action="/resume"><button class="btn" type="submit">Resume adding</button></form>'
+        : `<form method="post" action="/sync"><button class="btn" type="submit">Sync now</button></form>
+<form method="post" action="/pause"><button class="btn secondary" type="submit">Pause adding</button></form>`
   }</div>`,
 )}
-${win('Playlists', playlistRows(v.playlists))}
+${win('Playlists', playlistRows(v.playlists, !paused))}
 ${win('Recent adds', recent)}`,
   );
 }
@@ -283,7 +295,7 @@ function adminUserCard(u: AdminUserView): string {
     : `<form method="post" action="/admin/user/remove" data-confirm="${esc(confirmMsg)}" onsubmit="return confirm(this.dataset.confirm)">${hidden}<button class="btn danger" type="submit">Remove</button></form>`;
   return win(
     esc(u.name),
-    `<div class="who-row"><span class="tile">${pfp(u.avatar, 44)}</span><div class="grow"><div class="row"><strong>${esc(u.name)}</strong>${badge(s.status)}</div>
+    `<div class="who-row"><span class="tile">${pfp(u.avatar, 44)}</span><div class="grow"><div class="row"><strong>${esc(u.name)}</strong><span>${badge(s.status)}${s.addingPaused ? ' <span class="badge paused">adding paused</span>' : ''}</span></div>
 <div>Last sync: ${syncResult(s)}</div></div></div>
 <div class="muted">${counts(s)}</div>
 <div class="chips">${u.genres.map((g) => `<span class="chip">${esc(g)}</span>`).join('')}</div>

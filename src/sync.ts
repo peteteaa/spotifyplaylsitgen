@@ -59,7 +59,23 @@ export function initialPlaylists(userId: string, buckets: string[]): PlaylistRow
     spotify_id: null,
     name_synced: 1,
     item_count: 0,
+    paused_at: null,
   }));
+}
+
+/**
+ * Store a play (binds: user_id, track_id, name, artist_ids, artist_names, played_at, status). Dedupe is the
+ * primary key: a song the user already has is ignored, except a skipped one played again later, which gets
+ * another chance (the lookback re-reads the same play, which is not later).
+ */
+export const INSERT_PLAY = `INSERT INTO tracks (user_id, track_id, name, artist_ids, artist_names, played_at, status)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT (user_id, track_id) DO UPDATE SET status = excluded.status, played_at = excluded.played_at, slot = NULL, tries = 0
+  WHERE tracks.status = 'skipped' AND excluded.played_at > tracks.played_at`;
+
+/** A play from on or after a pause start is skipped; one from before it still counts. */
+export function skippedByPause(pausedAt: number | null, playedAt: number): boolean {
+  return pausedAt != null && playedAt >= pausedAt;
 }
 
 interface PlaylistChanges {
@@ -232,18 +248,17 @@ export async function syncUser(
         const artists = t.artists.filter((x) => x.id).slice(0, MAX_ARTISTS_PER_TRACK);
         inserts.push(
           db.stmt(
-            `INSERT OR IGNORE INTO tracks (user_id, track_id, name, artist_ids, artist_names, played_at, status)
-             VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
+            INSERT_PLAY,
             userId,
             t.id,
             t.name,
             JSON.stringify(artists.map((x) => x.id)),
             JSON.stringify(artists.map((x) => x.name)),
             playedAt,
+            skippedByPause(user.adding_paused_at, playedAt) ? 'skipped' : 'pending',
           ),
         );
       }
-      // Dedupe is the tracks primary key: songs this user already has are ignored by INSERT OR IGNORE.
       const b = await db.batch([
         ...inserts,
         db.stmt('UPDATE users SET cursor_after = ? WHERE id = ?', cursor || null, userId),
@@ -252,13 +267,15 @@ export async function syncUser(
       work = b[b.length - 2].results as TrackRow[];
       for (const r of b[b.length - 1].results as ArtistRow[]) cache.set(r.id, fromRow(r));
     }
+    // Adding is paused: new plays were just stored as skipped; songs from before the pause wait for the resume.
+    if (user.adding_paused_at != null) work = [];
 
     // ---- Place songs, looking up uncached artists while the budget allows ----
     const userBuckets = playlists.filter((p) => p.slot < GENRE_SLOTS).map((p) => p.bucket);
     const bySlot = new Map(playlists.map((p) => [p.slot, p]));
     const canAdd = (slot: number) => {
       const p = bySlot.get(slot);
-      return !!p?.spotify_id && p.item_count < PLAYLIST_CAP;
+      return !!p?.spotify_id && p.item_count < PLAYLIST_CAP && p.paused_at == null;
     };
     const parsed = new Map(work.map((t) => [t.track_id, { ids: JSON.parse(t.artist_ids) as string[], names: JSON.parse(t.artist_names) as string[] }]));
     const place = (t: TrackRow): number | { id: string; name: string } => {
@@ -282,7 +299,8 @@ export async function syncUser(
         if (t.status !== 'pending') continue;
         const r = place(t);
         if (typeof r === 'number') {
-          t.status = 'queued';
+          // A song for a paused playlist is skipped, not sent to another one (it would flood Misc).
+          t.status = skippedByPause(bySlot.get(r)?.paused_at ?? null, t.played_at) ? 'skipped' : 'queued';
           t.slot = r;
           dirty.set(t.track_id, t);
         } else if (!need && !failed.has(r.id)) need = r;
@@ -319,7 +337,7 @@ export async function syncUser(
     for (const t of work) if (t.status === 'queued') queued.set(t.slot!, [...(queued.get(t.slot!) ?? []), t]);
     addLoop: for (const [slot, list] of queued) {
       const p = bySlot.get(slot)!;
-      if (!p.spotify_id) continue;
+      if (!p.spotify_id || p.paused_at != null) continue; // paused: songs from before the pause wait for the resume
       for (let i = 0; i < list.length; ) {
         const room = PLAYLIST_CAP - p.item_count;
         if (room <= 0) {
@@ -362,7 +380,10 @@ export async function syncUser(
       }
     }
     const pending = work.filter((t) => t.status === 'pending').length;
-    res.message = `Added ${res.added} song${res.added === 1 ? '' : 's'}` + (pending ? ` · ${pending} waiting for a genre lookup` : '');
+    res.message =
+      user.adding_paused_at != null
+        ? 'Adding is paused'
+        : `Added ${res.added} song${res.added === 1 ? '' : 's'}` + (pending ? ` · ${pending} waiting for a genre lookup` : '');
     if (slotErrors.length) {
       ok = false;
       res.message += ` · ${slotErrors.join(' · ')}`.slice(0, 250);

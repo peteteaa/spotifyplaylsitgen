@@ -3,7 +3,7 @@ import { createInvite, adminResponse, removeUser, revokeInvite, setPaused } from
 import { callback, html, invitePage, isAdmin, login, logoutCookie, sessionUserId } from './auth';
 import { Db } from './budget';
 import { avatarSvg } from './avatars';
-import { flashText, genresForm, homeResponse, pictureForm, redirect, savePicture, saveGenres } from './home';
+import { flashText, genresForm, homeResponse, pictureForm, redirect, savePicture, saveGenres, setAddingPaused, setPlaylistPaused } from './home';
 import { landingPage, messagePage } from './html';
 import { runScheduled, syncNow } from './sync';
 import { Env, UserRow } from './types';
@@ -72,6 +72,10 @@ async function route(req: Request, env: Env): Promise<Response> {
   }
 
   if (path === '/picture') return method === 'POST' ? savePicture(db, user, await req.formData()) : pictureForm(user);
+
+  if (method === 'POST' && (path === '/pause' || path === '/resume')) return setAddingPaused(db, user, path === '/pause');
+  if (method === 'POST' && (path === '/playlist/pause' || path === '/playlist/resume'))
+    return setPlaylistPaused(db, user, await req.formData(), path === '/playlist/pause');
 
   if (path === '/genres') {
     const form = method === 'POST' ? await req.formData() : null;

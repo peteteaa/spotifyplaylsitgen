@@ -74,6 +74,8 @@ Settings in `wrangler.toml` under `[vars]`:
 npm run deploy
 ```
 
+This applies any new migrations to the real D1 first, then deploys. A deploy without its migrations breaks the features that need them (for example, saving a profile picture needs `0003_user_avatar.sql`).
+
 ### 6. Connect yourself
 
 1. Open https://skyesthingy.pthambundit.workers.dev.
@@ -123,7 +125,7 @@ env $(grep -v '^#' .dev.vars | xargs) npx vitest run test/live.test.ts
 | Script | What it does |
 |---|---|
 | `npm run dev` | Local server on 127.0.0.1:8787 with scheduled testing on |
-| `npm run deploy` | Deploy to Cloudflare |
+| `npm run deploy` | Apply new migrations to the real D1, then deploy to Cloudflare |
 | `npm run typecheck` | TypeScript check |
 | `npm test` | Unit tests |
 | `npm run db:migrate:local` | Apply migrations to the local D1 |
@@ -155,6 +157,7 @@ Other details:
 - Your 6 genres are picked once from `GET /me/top/artists` (medium_term, plus long_term if needed), weighted by rank. If you have fewer than 6, the most popular buckets fill in.
 - After that they are locked. Edit them from the home page or the admin page. The matching playlist is renamed. Songs already added stay put; songs waiting to be added are re-sorted under the new genres.
 - A playlist at 9,900 songs stops receiving songs and shows a warning. Nothing is ever deleted.
+- **Pausing.** On the home page you can pause adding (all playlists) or pause one playlist. Songs you play from the moment you pause are skipped: stored as `skipped` and never added. If you play one of them again after resuming, it is added as usual. Songs that were already waiting from before the pause are added when you resume. A song whose playlist is paused is not sent to another playlist (it would flood Misc). The sync still reads your plays while adding is paused (1 call per run, no genre lookups), so nothing from the pause sneaks in later. This is separate from the admin's pause, which stops syncing someone entirely.
 
 ## Free-plan limits and budget
 
@@ -193,10 +196,10 @@ Connecting a new user costs about 11 fetches, plus up to 25 Last.fm lookups for 
 
 ## Data (D1 tables)
 
-- `users`: one row per person, plus their last-sync status and recently-played cursor.
+- `users`: one row per person, plus their last-sync status, recently-played cursor and `adding_paused_at` (when they paused adding).
 - `tokens`: access + refresh token per user (never shown in pages or logs).
-- `playlists`: 7 rows per user (slots 0-5 = genres in rank order, 6 = Misc).
-- `tracks`: every song seen per user. This is both the dedupe table and the pending queue (`status` = pending / queued / added / full).
+- `playlists`: 7 rows per user (slots 0-5 = genres in rank order, 6 = Misc), with `paused_at` if that playlist is paused.
+- `tracks`: every song seen per user. This is both the dedupe table and the pending queue (`status` = pending / queued / added / full / skipped).
 - `artists`: shared genre cache, raw genres/tags plus where they came from (spotify / lastfm / none).
 - `invites`: only a SHA-256 hash of each code is stored.
 - `meta`: admin id, round-robin pointer, rate-limit back-offs, and a summary of the last cron run (`last_cron`: fetches and queries used).
@@ -221,7 +224,7 @@ Open `/admin` (admin only). It shows:
 - User list: status, last sync, songs added, the 6 genres, playlist links.
 - Invites with "N / 5 users". Pending invites count as seats.
 - Remove: playlists stay in that person's Spotify account but stop updating. Their tokens and data are deleted. You cannot remove yourself.
-- Pause / resume for each user.
+- Pause / resume for each user (stops their syncing entirely). A user's own pauses show as "adding paused" and "Paused" on a playlist; only that user can change those.
 - Edit genres for each user.
 
 ## Troubleshooting
